@@ -38,7 +38,5 @@ struct ContentView: View {
                 .tag(AppTab.devices)
         }
         .tint(Color(red: 0.45, green: 0.62, blue: 0.95))
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color(red: 0.11, green: 0.12, blue: 0.14), for: .tabBar)
     }
 }

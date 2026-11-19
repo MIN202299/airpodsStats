@@ -53,8 +53,10 @@ final class HealthKitService: @unchecked Sendable {
             deviceID: id == "||" ? "unknown" : id,
             deviceName: displayName,
             deviceModel: model,
+            manufacturer: device?.manufacturer,
             start: sample.startDate,
-            end: sample.endDate
+            end: sample.endDate,
+            level: sample.quantity.doubleValue(for: .decibelAWeightedSoundPressureLevel())
         )
     }
 }

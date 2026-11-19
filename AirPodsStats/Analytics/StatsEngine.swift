@@ -287,3 +287,83 @@ extension Calendar {
         return c
     }
 }
+
+// MARK: - Devices
+
+struct DeviceDetailStats {
+    var total: TimeInterval
+    var firstDay: Date?
+    var lastDay: Date?
+    var recordedDays: Int
+    var sessionCount: Int
+    var longest: WearSession?
+    var averageLevel: Double?
+
+    var averagePerSession: TimeInterval { sessionCount > 0 ? total / Double(sessionCount) : 0 }
+}
+
+extension StatsEngine {
+    /// 设备页时间范围对应的区间（均以 0 点对齐，截止到今天结束）
+    func interval(of period: DevicePeriod, now: Date = .now) -> DateInterval {
+        let todayEnd = calendar.dateInterval(of: .day, for: now)?.end ?? now
+        let today = calendar.startOfDay(for: now)
+        switch period {
+        case .last7:
+            return DateInterval(start: calendar.date(byAdding: .day, value: -6, to: today) ?? today, end: todayEnd)
+        case .last30:
+            return DateInterval(start: calendar.date(byAdding: .day, value: -29, to: today) ?? today, end: todayEnd)
+        case .thisWeek:
+            return interval(of: .week, containing: now, now: now)
+        case .thisMonth:
+            return interval(of: .month, containing: now, now: now)
+        case .all:
+            return interval(of: .all, containing: now, now: now)
+        }
+    }
+
+    /// 区间内每副耳机的佩戴时长（会话被裁剪到区间内），按时长降序
+    func deviceTotals(in interval: DateInterval) -> [DeviceTotal] {
+        var map: [String: DeviceTotal] = [:]
+        for s in sessions where s.end > interval.start && s.start < interval.end {
+            let start = max(s.start, interval.start), end = min(s.end, interval.end)
+            let d = end.timeIntervalSince(start)
+            if var t = map[s.deviceID] {
+                t.duration += d
+                t.sessionCount += 1
+                t.firstUsed = min(t.firstUsed, start)
+                t.lastUsed = max(t.lastUsed, end)
+                map[s.deviceID] = t
+            } else {
+                map[s.deviceID] = DeviceTotal(deviceID: s.deviceID, duration: d, sessionCount: 1, firstUsed: start, lastUsed: end)
+            }
+        }
+        return map.values.sorted { $0.duration > $1.duration }
+    }
+
+    /// 单副耳机的全部历史统计
+    func detail(for deviceID: String) -> DeviceDetailStats {
+        let mine = sessions.filter { $0.deviceID == deviceID }
+        let engine = StatsEngine(sessions: mine, calendar: calendar)
+        var levelSum = 0.0, levelWeight = 0.0
+        for s in mine {
+            if let l = s.averageLevel { levelSum += l * s.duration; levelWeight += s.duration }
+        }
+        return DeviceDetailStats(
+            total: engine.totalDuration,
+            firstDay: engine.firstDay,
+            lastDay: engine.lastDay,
+            recordedDays: engine.daily.values.filter { $0 > 0 }.count,
+            sessionCount: mine.count,
+            longest: mine.max(by: { $0.duration < $1.duration }),
+            averageLevel: levelWeight > 0 ? levelSum / levelWeight : nil
+        )
+    }
+
+    /// 最近 n 天（含今天）的每日时长
+    func recentDays(_ n: Int, now: Date = .now) -> [(day: Date, duration: TimeInterval)] {
+        let today = calendar.startOfDay(for: now)
+        return (0..<n).reversed().compactMap { offset in
+            calendar.date(byAdding: .day, value: -offset, to: today).map { (day: $0, duration: duration(on: $0)) }
+        }
+    }
+}

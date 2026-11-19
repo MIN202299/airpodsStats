@@ -95,3 +95,23 @@ enum Fmt {
         }
     }
 }
+
+extension Fmt {
+    private static let mdF: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.calendar = Calendar.stats
+        f.dateFormat = "M.d"
+        return f
+    }()
+
+    /// “11.10–11.16”
+    static func compactRange(_ interval: DateInterval, calendar: Calendar = .stats) -> String {
+        let last = calendar.date(byAdding: .second, value: -1, to: interval.end) ?? interval.end
+        if calendar.isDate(interval.start, inSameDayAs: last) { return mdF.string(from: interval.start) }
+        return "\(mdF.string(from: interval.start))–\(mdF.string(from: last))"
+    }
+
+    /// “2026.5.21–2026.11.14”
+    static func tightDayRange(_ a: Date, _ b: Date) -> String { "\(day(a))–\(day(b))" }
+}

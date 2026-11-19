@@ -13,18 +13,34 @@ enum SessionBuilder {
             let sorted = deviceSamples
                 .filter { $0.end > $0.start }
                 .sorted { $0.start < $1.start }
-            guard var current = sorted.first.map({ WearSession(deviceID: deviceID, start: $0.start, end: $0.end) }) else {
-                continue
+            guard let first = sorted.first else { continue }
+
+            var current = WearSession(deviceID: deviceID, start: first.start, end: first.end)
+            var levelSum = 0.0, levelWeight = 0.0
+
+            func accumulate(_ s: RawSample) {
+                guard let level = s.level else { return }
+                let w = s.end.timeIntervalSince(s.start)
+                levelSum += level * w
+                levelWeight += w
             }
+            func finish() {
+                current.averageLevel = levelWeight > 0 ? levelSum / levelWeight : nil
+                sessions.append(current)
+            }
+
+            accumulate(first)
             for sample in sorted.dropFirst() {
                 if sample.start.timeIntervalSince(current.end) <= mergeGap {
                     current.end = max(current.end, sample.end)
                 } else {
-                    sessions.append(current)
+                    finish()
                     current = WearSession(deviceID: deviceID, start: sample.start, end: sample.end)
+                    levelSum = 0; levelWeight = 0
                 }
+                accumulate(sample)
             }
-            sessions.append(current)
+            finish()
         }
 
         return sessions.sorted { $0.start < $1.start }
@@ -33,7 +49,7 @@ enum SessionBuilder {
     static func devices(from samples: [RawSample]) -> [String: HeadphoneDevice] {
         var result: [String: HeadphoneDevice] = [:]
         for s in samples where result[s.deviceID] == nil {
-            result[s.deviceID] = HeadphoneDevice(id: s.deviceID, rawName: s.deviceName, model: s.deviceModel)
+            result[s.deviceID] = HeadphoneDevice(id: s.deviceID, rawName: s.deviceName, model: s.deviceModel, manufacturer: s.manufacturer)
         }
         return result
     }

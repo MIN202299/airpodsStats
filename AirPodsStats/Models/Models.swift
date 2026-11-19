@@ -5,8 +5,11 @@ struct RawSample: Hashable, Sendable {
     var deviceID: String
     var deviceName: String
     var deviceModel: String?
+    var manufacturer: String? = nil
     var start: Date
     var end: Date
+    /// 耳机音频级别 dB(A)
+    var level: Double? = nil
 }
 
 /// 合并后的一次连续佩戴。
@@ -15,6 +18,8 @@ struct WearSession: Identifiable, Codable, Hashable, Sendable {
     var deviceID: String
     var start: Date
     var end: Date
+    /// 本次佩戴期间按时长加权的平均音量 dB(A)
+    var averageLevel: Double? = nil
 
     var duration: TimeInterval { max(0, end.timeIntervalSince(start)) }
 }
@@ -24,6 +29,7 @@ struct HeadphoneDevice: Identifiable, Codable, Hashable, Sendable {
     var id: String
     var rawName: String
     var model: String?
+    var manufacturer: String? = nil
 
     var kind: DeviceKind { DeviceKind.guess(name: rawName, model: model) }
 }
@@ -95,6 +101,30 @@ enum PeriodKind: String, CaseIterable, Identifiable, Sendable {
         case .month: return "较前一月"
         case .year: return "较前一年"
         case .all: return nil
+        }
+    }
+}
+
+/// 设备页的时间范围（右上角“近7天 ⌄”）
+enum DevicePeriod: String, CaseIterable, Identifiable, Sendable {
+    case last7, last30, thisWeek, thisMonth, all
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .last7: return "近7天"
+        case .last30: return "近30天"
+        case .thisWeek: return "本周"
+        case .thisMonth: return "本月"
+        case .all: return "全部"
+        }
+    }
+    var totalCaption: String {
+        switch self {
+        case .last7: return "近 7 天总佩戴时长"
+        case .last30: return "近 30 天总佩戴时长"
+        case .thisWeek: return "本周总佩戴时长"
+        case .thisMonth: return "本月总佩戴时长"
+        case .all: return "累计总佩戴时长"
         }
     }
 }

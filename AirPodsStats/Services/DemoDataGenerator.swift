@@ -18,7 +18,7 @@ enum DemoDataGenerator {
         var rng = SeededRNG(seed: 2025)
         let pro2 = (id: "demo-pro2", name: "AirPods Pro 2（配 MagSafe 充电盒）", model: "AirPods Pro 2")
         let pro1 = (id: "demo-pro1", name: "AirPods Pro", model: "AirPods Pro")
-        let max = (id: "demo-max", name: "AirPods Max", model: "AirPods Max")
+        let max = (id: "demo-max", name: "AirPods Max", model: "0x200a")
 
         let today = calendar.startOfDay(for: now)
         var result: [RawSample] = []
@@ -47,7 +47,9 @@ enum DemoDataGenerator {
                 var s = cursor
                 while s < sessionEnd {
                     let e = Swift.min(sessionEnd, s.addingTimeInterval(TimeInterval(Int.random(in: 3...20, using: &rng) * 60)))
-                    result.append(RawSample(deviceID: device.id, deviceName: device.name, deviceModel: device.model, start: s, end: e))
+                    result.append(RawSample(deviceID: device.id, deviceName: device.name, deviceModel: device.model,
+                                            manufacturer: "Apple Inc.", start: s, end: e,
+                                            level: Double.random(in: 48...72, using: &rng)))
                     s = e.addingTimeInterval(TimeInterval(Int.random(in: 0...90, using: &rng)))
                 }
                 cursor = sessionEnd.addingTimeInterval(TimeInterval(Int.random(in: 20...180, using: &rng) * 60))
