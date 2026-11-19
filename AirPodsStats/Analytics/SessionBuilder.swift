@@ -46,6 +46,35 @@ enum SessionBuilder {
         return sessions.sorted { $0.start < $1.start }
     }
 
+    /// 把已经合并好的会话再按设备合并一次（用于“合并设备”后两副耳机的会话首尾相接或重叠的情况）
+    static func coalesce(_ input: [WearSession], mergeGap: TimeInterval) -> [WearSession] {
+        var result: [WearSession] = []
+        for (_, group) in Dictionary(grouping: input, by: \.deviceID) {
+            let sorted = group.sorted { $0.start < $1.start }
+            guard var current = sorted.first else { continue }
+            var levelSum = (current.averageLevel ?? 0) * current.duration
+            var levelWeight = current.averageLevel == nil ? 0 : current.duration
+
+            for s in sorted.dropFirst() {
+                if s.start.timeIntervalSince(current.end) <= mergeGap {
+                    current.end = max(current.end, s.end)
+                } else {
+                    current.averageLevel = levelWeight > 0 ? levelSum / levelWeight : nil
+                    result.append(current)
+                    current = s
+                    levelSum = 0; levelWeight = 0
+                    // 新会话自己的音量在下面统一累加
+                    if let l = s.averageLevel { levelSum = l * s.duration; levelWeight = s.duration }
+                    continue
+                }
+                if let l = s.averageLevel { levelSum += l * s.duration; levelWeight += s.duration }
+            }
+            current.averageLevel = levelWeight > 0 ? levelSum / levelWeight : nil
+            result.append(current)
+        }
+        return result.sorted { $0.start < $1.start }
+    }
+
     static func devices(from samples: [RawSample]) -> [String: HeadphoneDevice] {
         var result: [String: HeadphoneDevice] = [:]
         for s in samples where result[s.deviceID] == nil {

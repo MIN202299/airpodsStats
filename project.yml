@@ -32,3 +32,23 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+  AirPodsStatsTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AirPodsStatsTests
+    dependencies:
+      - target: AirPodsStats
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.airpodsstats.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+schemes:
+  AirPodsStats:
+    build:
+      targets:
+        AirPodsStats: all
+    test:
+      targets:
+        - AirPodsStatsTests

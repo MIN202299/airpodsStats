@@ -3,11 +3,13 @@ import SwiftUI
 /// 设备页：粒子球总时长 + 可左右滑动的设备卡片
 struct DevicesView: View {
     @Environment(UsageStore.self) private var store
+    @Environment(AppRouter.self) private var router
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("devicePeriod") private var periodRaw = DevicePeriod.last7.rawValue
-    @State private var path: [String] = []
     @State private var currentID: String?
-    @State private var renaming: HeadphoneDevice?
+    @State private var editing: HeadphoneDevice?
     @State private var showSettings = false
+    @State private var isVisible = false
 
     private var period: DevicePeriod { DevicePeriod(rawValue: periodRaw) ?? .last7 }
 
@@ -24,15 +26,21 @@ struct DevicesView: View {
         let sum = totals.map(\.duration).reduce(0, +)
         let entries = makeEntries(totals: totals, sum: sum)
 
-        NavigationStack(path: $path) {
+        @Bindable var router = router
+        NavigationStack(path: $router.devicePath) {
             GeometryReader { geo in
                 ScrollView {
                     VStack(spacing: 0) {
                         header
+                        StatusBanner(style: .night)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
                         sphere(total: sum, width: geo.size.width)
                         if entries.isEmpty {
-                            GlassCard { EmptyHint(text: "还没有读取到耳机记录") }
-                                .padding(.horizontal, 40)
+                            if store.hasData && !store.isLoading {
+                                GlassCard { EmptyHint(text: "还没有读取到耳机记录") }
+                                    .padding(.horizontal, 40)
+                            }
                         } else {
                             carousel(entries: entries, width: geo.size.width)
                             pageDots(entries: entries)
@@ -46,20 +54,27 @@ struct DevicesView: View {
                     .padding(.bottom, 40)
                 }
                 .scrollIndicators(.hidden)
-                .scrollBounceBehavior(.basedOnSize)
+                .refreshable { await store.reload(force: true) }
             }
             .background(NightBackground(horizon: 0.47))
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { id in
-                DeviceDetailView(deviceID: id, period: period)
+            .navigationDestination(for: DeviceRoute.self) { route in
+                switch route {
+                case .detail(let id): DeviceDetailView(deviceID: id, period: period)
+                case .history(let id): SessionHistoryView(deviceID: id)
+                }
             }
-            .sheet(item: $renaming) { RenameSheet(device: $0) }
+            .sheet(item: $editing) { DeviceEditSheet(device: $0) }
             .sheet(isPresented: $showSettings) { SettingsSheet() }
             .onChange(of: entries.map(\.id)) { _, ids in
                 if let id = currentID, ids.contains(id) { return }
                 currentID = ids.first
             }
-            .onAppear { if currentID == nil { currentID = entries.first?.id } }
+            .onAppear {
+                isVisible = true
+                if currentID == nil { currentID = entries.first?.id }
+            }
+            .onDisappear { isVisible = false }
         }
     }
 
@@ -99,7 +114,7 @@ struct DevicesView: View {
     private func sphere(total: TimeInterval, width: CGFloat) -> some View {
         let side = min(width * 0.82, 360)
         return ZStack {
-            ParticleSphere()
+            ParticleSphere(paused: !isVisible || scenePhase != .active || !router.devicePath.isEmpty)
                 .frame(width: side, height: side)
             VStack(spacing: 8) {
                 DurationText(seconds: total, size: 54)
@@ -116,7 +131,7 @@ struct DevicesView: View {
         return ScrollView(.horizontal) {
             LazyHStack(spacing: 16) {
                 ForEach(entries) { e in
-                    Button { path.append(e.id) } label: {
+                    Button { router.devicePath.append(.detail(e.id)) } label: {
                         DeviceGlassCard(name: store.displayName(for: e.id), kind: store.kind(for: e.id),
                                         duration: e.duration, share: e.share)
                     }
@@ -154,8 +169,9 @@ struct DevicesView: View {
 
     @ViewBuilder
     private func menu(for id: String) -> some View {
-        Button { path.append(id) } label: { Label("查看记录", systemImage: "chart.bar") }
-        Button { renaming = store.devices[id] } label: { Label("重命名", systemImage: "pencil") }
+        Button { router.devicePath.append(.detail(id)) } label: { Label("查看详情", systemImage: "chart.bar") }
+        Button { router.devicePath.append(.history(id)) } label: { Label("全部佩戴记录", systemImage: "list.bullet") }
+        Button { editing = store.devices[id] } label: { Label("编辑 / 合并 / 隐藏", systemImage: "pencil") }
         if store.selectedDeviceIDs == [id] {
             Button { store.selectedDeviceIDs = [] } label: { Label("统计全部耳机", systemImage: "headphones") }
         } else {
@@ -174,85 +190,3 @@ struct DevicesView: View {
     }
 }
 
-// MARK: - 重命名
-
-struct RenameSheet: View {
-    @Environment(UsageStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    var device: HeadphoneDevice
-    @State private var name = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField(device.rawName, text: $name)
-                } footer: {
-                    Text("健康 App 中的原始名称：\(device.rawName)\(device.model.map { "（\($0)）" } ?? "")。留空则恢复原名。")
-                }
-            }
-            .navigationTitle("编辑耳机")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { store.setAlias(name, for: device.id); dismiss() }
-                }
-            }
-            .onAppear { name = store.aliases[device.id] ?? "" }
-        }
-        .presentationDetents([.medium])
-        .preferredColorScheme(.dark)
-    }
-}
-
-// MARK: - 设置
-
-struct SettingsSheet: View {
-    @Environment(UsageStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        @Bindable var store = store
-        NavigationStack {
-            Form {
-                Section("数据") {
-                    Picker("数据来源", selection: $store.dataSource) {
-                        ForEach(DataSourceKind.allCases) { Text($0.title).tag($0) }
-                    }
-                    Stepper(value: $store.mergeGapMinutes, in: 1...30) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("会话合并间隔：\(store.mergeGapMinutes) 分钟")
-                            Text("间隔小于该值的记录视为同一次佩戴")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Button {
-                        Task { await store.reload() }
-                    } label: {
-                        HStack {
-                            Text("重新读取历史")
-                            Spacer()
-                            if store.state == .loading { ProgressView() }
-                        }
-                    }
-                    .disabled(store.state == .loading)
-                    if let updated = store.lastUpdated {
-                        LabeledContent("上次更新", value: "\(Fmt.day(updated)) \(Fmt.time(updated))")
-                    }
-                }
-                Section("统计方式") {
-                    Text("iOS 不开放 AirPods 的佩戴传感器记录。本应用读取「健康」App 中的“耳机音频级别”历史：耳机播放音频时系统会持续写入带设备名称和音量的样本，相邻样本合并后近似为一次佩戴。只开降噪而不播放音频的时段不会被记录，因此“无记录不等于未佩戴”。所有数据仅在本机处理。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-}

@@ -2,10 +2,10 @@ import Foundation
 
 // MARK: - Result types
 
-struct DayRecord: Hashable { var day: Date; var duration: TimeInterval }
-struct MonthRecord: Hashable { var month: Date; var duration: TimeInterval }
-struct StreakRecord: Hashable { var start: Date; var end: Date; var days: Int }
-struct DeviceTotal: Hashable, Identifiable {
+struct DayRecord: Hashable, Sendable { var day: Date; var duration: TimeInterval }
+struct MonthRecord: Hashable, Sendable { var month: Date; var duration: TimeInterval }
+struct StreakRecord: Hashable, Sendable { var start: Date; var end: Date; var days: Int }
+struct DeviceTotal: Hashable, Identifiable, Sendable {
     var deviceID: String
     var duration: TimeInterval
     var sessionCount: Int
@@ -14,7 +14,7 @@ struct DeviceTotal: Hashable, Identifiable {
     var id: String { deviceID }
 }
 
-struct PersonalRecords {
+struct PersonalRecords: Sendable {
     var bestDay: DayRecord?
     var longestSession: WearSession?
     var longestStreak: StreakRecord?
@@ -22,7 +22,7 @@ struct PersonalRecords {
     var topDevice: DeviceTotal?
 }
 
-struct PeriodBar: Identifiable, Hashable {
+struct PeriodBar: Identifiable, Hashable, Sendable {
     var index: Int
     var start: Date
     var end: Date
@@ -34,7 +34,7 @@ struct PeriodBar: Identifiable, Hashable {
     var key: String { String(index) }
 }
 
-struct PeriodSummary {
+struct PeriodSummary: Sendable {
     var kind: PeriodKind
     var interval: DateInterval
     var title: String
@@ -53,7 +53,7 @@ struct PeriodSummary {
 // MARK: - Engine
 
 /// 纯计算层：给定会话列表，计算所有统计。与 UI / HealthKit 无关，方便测试。
-struct StatsEngine {
+struct StatsEngine: Sendable {
     let calendar: Calendar
     let sessions: [WearSession]
     /// 当天 0 点 -> 当天佩戴秒数（跨天会话会被拆分）
@@ -290,7 +290,7 @@ extension Calendar {
 
 // MARK: - Devices
 
-struct DeviceDetailStats {
+struct DeviceDetailStats: Sendable {
     var total: TimeInterval
     var firstDay: Date?
     var lastDay: Date?

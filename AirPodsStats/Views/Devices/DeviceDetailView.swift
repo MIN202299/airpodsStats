@@ -3,21 +3,42 @@ import SwiftUI
 /// 单副耳机的详情页
 struct DeviceDetailView: View {
     @Environment(UsageStore.self) private var store
+    @Environment(AppRouter.self) private var router
     var deviceID: String
     var period: DevicePeriod
-    @State private var renaming: HeadphoneDevice?
+    @State private var editing: HeadphoneDevice?
     @State private var selectedDay: String?
 
     var body: some View {
+        if store.devices[deviceID] == nil && store.hasData {
+            // 设备已被合并或隐藏
+            ContentUnavailableView {
+                Label("这副耳机已不在统计中", systemImage: "headphones")
+            } description: {
+                Text(store.mergeTargets[deviceID] != nil ? "它已被合并到「\(store.displayName(for: store.resolvedID(deviceID)))」。" : "它可能已被隐藏，可在设置中恢复。")
+            } actions: {
+                if store.mergeTargets[deviceID] != nil {
+                    Button("查看合并后的耳机") { router.devicePath = [.detail(store.resolvedID(deviceID))] }
+                }
+            }
+            .background(NightBackground(horizon: 0.40))
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         let all = store.allDevicesEngine
         let interval = all.interval(of: period)
         let periodTotals = all.deviceTotals(in: interval)
         let periodSum = periodTotals.map(\.duration).reduce(0, +)
-        let periodDuration = periodTotals.first { $0.deviceID == deviceID }?.duration ?? 0
+        let periodDuration = periodTotals.first(where: { $0.deviceID == deviceID })?.duration ?? 0
 
         let mine = StatsEngine(sessions: store.allSessions.filter { $0.deviceID == deviceID })
         let detail = mine.detail(for: deviceID)
         let trend = mine.recentDays(30)
+        let recent = Array(mine.sessions.suffix(5).reversed())
         let device = store.devices[deviceID]
         let name = store.displayName(for: deviceID)
 
@@ -87,6 +108,43 @@ struct DeviceDetailView: View {
                         selectedKey: $selectedDay
                     )
                 }
+
+                if let key = selectedDay, let d = trend.first(where: { Fmt.day($0.day) == key }) {
+                    Button {
+                        selectedDay = nil
+                        router.showDay(d.day)
+                    } label: {
+                        Label("查看 \(Fmt.barDetail(.month, date: d.day, calendar: .stats)) 的全部记录", systemImage: "arrow.right.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(Night.lavender)
+                }
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text("最近佩戴记录")
+                        .font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                    Spacer()
+                    if !recent.isEmpty {
+                        Button("查看全部") { router.devicePath.append(.history(deviceID)) }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Night.lavender)
+                    }
+                }
+                .padding(.top, 6)
+
+                NightTile(padding: 18) {
+                    if recent.isEmpty {
+                        EmptyHint(text: "暂无记录")
+                    } else {
+                        VStack(spacing: 12) {
+                            ForEach(recent) { s in
+                                Button { router.showDay(s.start) } label: { SessionRow(session: s, showsDate: true) }
+                                    .buttonStyle(.plain)
+                                if s.id != recent.last?.id { Divider().overlay(.white.opacity(0.08)) }
+                            }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
@@ -97,13 +155,14 @@ struct DeviceDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("编辑") { renaming = device }
+                Button("编辑") { editing = device }
                     .font(.system(size: 18, weight: .semibold))
                     .disabled(device == nil)
             }
         }
         .tint(.white)
-        .sheet(item: $renaming) { RenameSheet(device: $0) }
+        .sheet(item: $editing) { DeviceEditSheet(device: $0) }
+        .refreshable { await store.reload(force: true) }
     }
 
     /// “所选周期 11.10–11.16 · Apple Inc. · 0x202d”

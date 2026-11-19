@@ -95,6 +95,8 @@ struct DurationText: View {
         .lineLimit(1)
         .minimumScaleFactor(0.5)
         .contentTransition(.numericText())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(v.hours > 0 ? "\(v.hours) 小时 \(v.minutes) 分钟" : "\(v.minutes) 分钟")
     }
 }
 

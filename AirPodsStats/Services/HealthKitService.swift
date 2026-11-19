@@ -34,6 +34,22 @@ final class HealthKitService: @unchecked Sendable {
         return samples.map(Self.convert)
     }
 
+    /// 健康数据有新样本写入时回调（仅在 App 运行期间生效）
+    @discardableResult
+    func observeChanges(_ onChange: @escaping @Sendable () -> Void) -> HKObserverQuery? {
+        guard isAvailable else { return nil }
+        let query = HKObserverQuery(sampleType: exposureType, predicate: nil) { _, completion, error in
+            if error == nil { onChange() }
+            completion()
+        }
+        store.execute(query)
+        return query
+    }
+
+    func stop(_ query: HKQuery) {
+        store.stop(query)
+    }
+
     private static func convert(_ sample: HKQuantitySample) -> RawSample {
         let device = sample.device
         let name = device?.name?.trimmingCharacters(in: .whitespacesAndNewlines)

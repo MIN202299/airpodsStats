@@ -4,6 +4,8 @@ import SwiftUI
 struct PeriodTotalCard: View {
     var summary: PeriodSummary
     @Binding var selectedBar: String?
+    /// 选中柱形后点“查看”：年 → 月，月/周 → 当天
+    var onDrillDown: (PeriodBar) -> Void = { _ in }
 
     private var selected: PeriodBar? {
         guard let selectedBar else { return nil }
@@ -21,6 +23,16 @@ struct PeriodTotalCard: View {
                         Text(selected.map { "\($0.detailLabel) · 有记录 \($0.recordedDays) 天" } ?? "本周期佩戴时长")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.secondaryText)
+                        if let selected {
+                            Button { onDrillDown(selected) } label: {
+                                Label(drillTitle(selected), systemImage: "arrow.right.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(Capsule().fill(.white.opacity(0.1)))
+                            }
+                            .foregroundStyle(Theme.accent)
+                            .padding(.top, 2)
+                        }
                     }
                     Spacer(minLength: 8)
                     if let title = summary.kind.comparisonTitle, let delta = summary.delta, selected == nil {
@@ -49,6 +61,14 @@ struct PeriodTotalCard: View {
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.secondaryText)
             }
+        }
+    }
+
+    private func drillTitle(_ bar: PeriodBar) -> String {
+        switch summary.kind {
+        case .all: return "查看 \(bar.label) 年"
+        case .year: return "查看 \(bar.label)"
+        case .week, .month: return "查看当天"
         }
     }
 }

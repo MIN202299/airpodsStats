@@ -73,9 +73,12 @@ struct ParticleSphere: View {
     }
 
     private let particles: [Particle]
+    /// 页面不可见时暂停动画，节省电量
+    var paused: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(count: Int = 520, seed: UInt64 = 11) {
+    init(count: Int = 520, seed: UInt64 = 11, paused: Bool = false) {
+        self.paused = paused
         var rng = DemoDataGenerator.SeededRNG(seed: seed)
         let golden = Double.pi * (3 - 5.0.squareRoot())
         particles = (0..<count).map { i in
@@ -96,7 +99,7 @@ struct ParticleSphere: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || paused)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let r = min(size.width, size.height) / 2

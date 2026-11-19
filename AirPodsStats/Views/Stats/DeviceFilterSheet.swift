@@ -14,11 +14,12 @@ struct DeviceFilterSheet: View {
                         row(title: "全部耳机", symbol: "headphones", checked: store.selectedDeviceIDs.isEmpty)
                     }
                     Button {
-                        store.selectedDeviceIDs = Set(store.devices.values.filter { $0.kind.isAirPods }.map(\.id))
+                        store.selectedDeviceIDs = store.airPodsDeviceIDs
                     } label: {
-                        row(title: "仅 AirPods", symbol: "airpodspro", checked: false)
+                        row(title: "仅 AirPods", symbol: "airpodspro",
+                            checked: !store.airPodsDeviceIDs.isEmpty && store.selectedDeviceIDs == store.airPodsDeviceIDs)
                     }
-                    .disabled(!store.devices.values.contains { $0.kind.isAirPods })
+                    .disabled(store.airPodsDeviceIDs.isEmpty)
                 }
                 Section("按耳机筛选") {
                     if store.devices.isEmpty {
